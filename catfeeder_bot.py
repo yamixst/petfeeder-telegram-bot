@@ -600,14 +600,16 @@ async def cmd_deletetimer(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 # ---------------------------------------------------------------------------
 
 
+async def post_init(application: Application) -> None:
+    """Initialize timers after the application is ready."""
+    init_timers(application.job_queue)
+
+
 def main() -> None:
     """Build and run the Telegram bot application."""
     logger.info("Starting Cat Feeder Bot...")
 
-    application = Application.builder().token(BOT_TOKEN).build()
-
-    # Initialize timers
-    init_timers(application.job_queue)
+    application = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
 
     # Register handlers
     application.add_handler(CommandHandler("start", cmd_start))
