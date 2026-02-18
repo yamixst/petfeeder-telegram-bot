@@ -1,24 +1,29 @@
 #!/usr/bin/env python3
 """Telegram bot for controlling a Tuya-based automatic cat feeder.
 
-Provides /start command with inline keyboard buttons:
-  - Feed: dispenses a configured number of food portions
-  - Status: queries and displays the current device state
+Provides commands:
+  - /feed: dispenses a configured number of food portions
+  - /status: queries and displays the current device state
+  - /addtimer: schedules automatic feeding
+  - /timers: lists all scheduled feeding times
+  - /deletetimer: removes a scheduled feeding time
 """
 
 import configparser
+import json
 import logging
 import sys
+from datetime import time
 from pathlib import Path
 from typing import Final
 
 import tinytuya
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Update
 from telegram.ext import (
     Application,
-    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
+    JobQueue,
 )
 
 # ---------------------------------------------------------------------------
@@ -26,6 +31,7 @@ from telegram.ext import (
 # ---------------------------------------------------------------------------
 
 CONFIG_PATH: Final[str] = str(Path(__file__).resolve().parent / "catfeeder.conf")
+TIMERS_PATH: Final[str] = str(Path(__file__).resolve().parent / "timers.json")
 
 
 def load_config(path: str = CONFIG_PATH) -> configparser.ConfigParser:
@@ -92,9 +98,8 @@ PORTIONS: Final[int] = CONFIG.getint("device", "portions")
 LOG_LEVEL: Final[str] = CONFIG.get("logging", "level", fallback="INFO").upper()
 LOG_FILE: Final[str] = CONFIG.get("logging", "file", fallback="")
 
-# Callback data constants
-CB_FEED: Final[str] = "feed"
-CB_STATUS: Final[str] = "status"
+# Timer storage
+TIMERS: dict[str, dict] = {}  # Format: {"HH:MM": {"portions": int, "job": Job}}
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -193,23 +198,101 @@ def save_allowed_user_ids() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Keyboard builder
+# Timer management
 # ---------------------------------------------------------------------------
 
 
-def build_main_keyboard() -> InlineKeyboardMarkup:
-    """Build the main inline keyboard with Feed and Status buttons.
+def load_timers() -> dict[str, dict]:
+    """Load timer configuration from JSON file.
 
     Returns:
-        InlineKeyboardMarkup with two buttons.
+        Dictionary with timer data (without job objects).
     """
-    keyboard = [
-        [
-            InlineKeyboardButton("🍽 Feed", callback_data=CB_FEED),
-            InlineKeyboardButton("📊 Status", callback_data=CB_STATUS),
-        ]
-    ]
-    return InlineKeyboardMarkup(keyboard)
+    if not Path(TIMERS_PATH).is_file():
+        return {}
+
+    try:
+        with open(TIMERS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            logger.info("Loaded timers from file: %s", data)
+            return data
+    except Exception as e:
+        logger.error("Failed to load timers: %s", e)
+        return {}
+
+
+def save_timers() -> None:
+    """Persist timer configuration to JSON file (without job objects)."""
+    data = {
+        timer_key: {"portions": info["portions"]} for timer_key, info in TIMERS.items()
+    }
+    try:
+        with open(TIMERS_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        logger.info("Saved timers to file: %s", data)
+    except Exception as e:
+        logger.error("Failed to save timers: %s", e)
+
+
+async def timer_callback(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Execute scheduled feeding."""
+    portions = context.job.data.get("portions", PORTIONS)
+    timer_key = context.job.data.get("timer_key", "unknown")
+
+    logger.info("Timer %s triggered, feeding %d portions", timer_key, portions)
+
+    try:
+        trigger_feed(portions)
+        logger.info("Scheduled feeding completed for timer %s", timer_key)
+    except Exception as e:
+        logger.error(
+            "Failed to execute scheduled feeding for timer %s: %s", timer_key, e
+        )
+
+
+# ---------------------------------------------------------------------------
+# Timer initialization
+# ---------------------------------------------------------------------------
+
+
+def schedule_timer(job_queue: JobQueue, timer_key: str, portions: int) -> None:
+    """Schedule a daily feeding timer.
+
+    Args:
+        job_queue: Telegram job queue instance.
+        timer_key: Time string in HH:MM format.
+        portions: Number of portions to feed.
+    """
+    try:
+        hour, minute = map(int, timer_key.split(":"))
+        feed_time = time(hour=hour, minute=minute)
+
+        job = job_queue.run_daily(
+            timer_callback,
+            time=feed_time,
+            data={"timer_key": timer_key, "portions": portions},
+            name=f"timer_{timer_key}",
+        )
+
+        TIMERS[timer_key] = {"portions": portions, "job": job}
+        logger.info("Scheduled timer %s for %d portions", timer_key, portions)
+    except Exception as e:
+        logger.error("Failed to schedule timer %s: %s", timer_key, e)
+        raise
+
+
+def init_timers(job_queue: JobQueue) -> None:
+    """Load and schedule all saved timers on bot startup.
+
+    Args:
+        job_queue: Telegram job queue instance.
+    """
+    saved_timers = load_timers()
+    for timer_key, data in saved_timers.items():
+        try:
+            schedule_timer(job_queue, timer_key, data["portions"])
+        except Exception as e:
+            logger.error("Failed to restore timer %s: %s", timer_key, e)
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +301,7 @@ def build_main_keyboard() -> InlineKeyboardMarkup:
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /start command — greet the user and show the main keyboard."""
+    """Handle the /start command — greet the user."""
     user = update.effective_user
     if user is None or not is_authorized(user.id):
         logger.warning("Unauthorized access attempt from user %s", user)
@@ -228,9 +311,38 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("User %s (%d) started the bot", user.full_name, user.id)
     await update.message.reply_text(
         f"👋 Hello, {user.first_name}!\n\n"
-        "Use the buttons below to control the cat feeder:",
-        reply_markup=build_main_keyboard(),
+        f"Cat Feeder Bot is ready. Use /help to see available commands."
     )
+
+
+async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /help command — show available commands."""
+    user = update.effective_user
+    if user is None:
+        return
+
+    help_text = (
+        "📖 *Available Commands:*\n\n"
+        "/myid — Get your Telegram user ID\n"
+        "/help — Show this help message\n"
+    )
+
+    if user and is_authorized(user.id):
+        help_text += (
+            "\n*Feeder Control:*\n"
+            f"/feed — Feed the cat ({PORTIONS} portions)\n"
+            "/status — Check device status\n"
+            "\n*Timer Management:*\n"
+            "/addtimer HH:MM portions — Schedule feeding\n"
+            "/timers — List all scheduled feedings\n"
+            "/deletetimer HH:MM — Remove scheduled feeding\n"
+            "\n*User Management:*\n"
+            "/adduser <user\\_id> — Add user to allowed list\n"
+        )
+    else:
+        help_text += "\n_Contact an authorized user to get access._"
+
+    await update.message.reply_text(help_text, parse_mode="Markdown")
 
 
 async def cmd_myid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -285,33 +397,14 @@ async def cmd_adduser(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
 
-async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Route inline‑keyboard button presses to the appropriate action."""
-    query = update.callback_query
-    if query is None:
-        return
-
-    await query.answer()
-
+async def cmd_feed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /feed command — feed the cat."""
     user = update.effective_user
     if user is None or not is_authorized(user.id):
-        logger.warning("Unauthorized callback from user %s", user)
-        await query.edit_message_text("⛔ Access denied.")
+        logger.warning("Unauthorized /feed attempt from user %s", user)
+        await update.message.reply_text("⛔ Access denied.")
         return
 
-    if query.data == CB_FEED:
-        await handle_feed(query, user)
-    elif query.data == CB_STATUS:
-        await handle_status(query, user)
-    else:
-        logger.warning("Unknown callback data: %s", query.data)
-
-
-async def handle_feed(query, user) -> None:
-    """Process the Feed button press.
-
-    Sends a feed command and reports the result back to the user.
-    """
     logger.info("User %s (%d) requested feeding", user.full_name, user.id)
 
     try:
@@ -327,14 +420,17 @@ async def handle_feed(query, user) -> None:
         logger.exception("Failed to send feed command")
         text = "❌ Failed to communicate with the feeder. Check the device connection."
 
-    await query.edit_message_text(text, reply_markup=build_main_keyboard())
+    await update.message.reply_text(text)
 
 
-async def handle_status(query, user) -> None:
-    """Process the Status button press.
+async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /status command — query device status."""
+    user = update.effective_user
+    if user is None or not is_authorized(user.id):
+        logger.warning("Unauthorized /status attempt from user %s", user)
+        await update.message.reply_text("⛔ Access denied.")
+        return
 
-    Queries the device status and displays it to the user.
-    """
     logger.info("User %s (%d) requested status", user.full_name, user.id)
 
     try:
@@ -356,11 +452,147 @@ async def handle_status(query, user) -> None:
         logger.exception("Failed to query device status")
         text = "❌ Failed to communicate with the feeder. Check the device connection."
 
-    await query.edit_message_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=build_main_keyboard(),
-    )
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
+async def cmd_addtimer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /addtimer HH:MM portions command — schedule a feeding timer."""
+    user = update.effective_user
+    if user is None or not is_authorized(user.id):
+        logger.warning("Unauthorized /addtimer attempt from user %s", user)
+        await update.message.reply_text("⛔ Access denied.")
+        return
+
+    if len(context.args) < 2:
+        await update.message.reply_text(
+            "Usage: `/addtimer HH:MM portions`\nExample: `/addtimer 08:00 2`",
+            parse_mode="Markdown",
+        )
+        return
+
+    timer_key = context.args[0]
+
+    # Validate time format
+    try:
+        hour, minute = map(int, timer_key.split(":"))
+        if not (0 <= hour < 24 and 0 <= minute < 60):
+            raise ValueError("Invalid time range")
+        timer_key = f"{hour:02d}:{minute:02d}"  # Normalize format
+    except (ValueError, AttributeError):
+        await update.message.reply_text(
+            "⚠️ Invalid time format. Use HH:MM (e.g., 08:00)"
+        )
+        return
+
+    # Validate portions
+    try:
+        portions = int(context.args[1])
+        if portions <= 0:
+            raise ValueError("Portions must be positive")
+    except ValueError:
+        await update.message.reply_text(
+            "⚠️ Invalid portions number. Must be a positive integer."
+        )
+        return
+
+    # Check if timer already exists
+    if timer_key in TIMERS:
+        await update.message.reply_text(
+            f"ℹ️ Timer for `{timer_key}` already exists. Delete it first with /deletetimer",
+            parse_mode="Markdown",
+        )
+        return
+
+    # Schedule the timer
+    try:
+        schedule_timer(context.application.job_queue, timer_key, portions)
+        save_timers()
+
+        logger.info(
+            "User %s (%d) added timer %s with %d portions",
+            user.full_name,
+            user.id,
+            timer_key,
+            portions,
+        )
+        await update.message.reply_text(
+            f"✅ Timer added: `{timer_key}` — {portions} portion(s)",
+            parse_mode="Markdown",
+        )
+    except Exception as e:
+        logger.exception("Failed to add timer %s", timer_key)
+        await update.message.reply_text(f"❌ Failed to add timer: {e}")
+
+
+async def cmd_timers(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /timers command — list all scheduled timers."""
+    user = update.effective_user
+    if user is None or not is_authorized(user.id):
+        logger.warning("Unauthorized /timers attempt from user %s", user)
+        await update.message.reply_text("⛔ Access denied.")
+        return
+
+    if not TIMERS:
+        await update.message.reply_text("ℹ️ No timers scheduled.")
+        return
+
+    lines = ["⏰ *Scheduled Timers:*\n"]
+    for timer_key in sorted(TIMERS.keys()):
+        portions = TIMERS[timer_key]["portions"]
+        lines.append(f"• `{timer_key}` — {portions} portion(s)")
+
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+async def cmd_deletetimer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /deletetimer HH:MM command — remove a scheduled timer."""
+    user = update.effective_user
+    if user is None or not is_authorized(user.id):
+        logger.warning("Unauthorized /deletetimer attempt from user %s", user)
+        await update.message.reply_text("⛔ Access denied.")
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "Usage: `/deletetimer HH:MM`\nExample: `/deletetimer 08:00`",
+            parse_mode="Markdown",
+        )
+        return
+
+    timer_key = context.args[0]
+
+    # Normalize format
+    try:
+        hour, minute = map(int, timer_key.split(":"))
+        timer_key = f"{hour:02d}:{minute:02d}"
+    except (ValueError, AttributeError):
+        await update.message.reply_text(
+            "⚠️ Invalid time format. Use HH:MM (e.g., 08:00)"
+        )
+        return
+
+    if timer_key not in TIMERS:
+        await update.message.reply_text(
+            f"ℹ️ Timer `{timer_key}` not found.", parse_mode="Markdown"
+        )
+        return
+
+    # Remove the timer
+    try:
+        job = TIMERS[timer_key].get("job")
+        if job:
+            job.schedule_removal()
+
+        del TIMERS[timer_key]
+        save_timers()
+
+        logger.info("User %s (%d) deleted timer %s", user.full_name, user.id, timer_key)
+        await update.message.reply_text(
+            f"✅ Timer `{timer_key}` deleted.", parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.exception("Failed to delete timer %s", timer_key)
+        await update.message.reply_text(f"❌ Failed to delete timer: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -374,11 +606,19 @@ def main() -> None:
 
     application = Application.builder().token(BOT_TOKEN).build()
 
+    # Initialize timers
+    init_timers(application.job_queue)
+
     # Register handlers
     application.add_handler(CommandHandler("start", cmd_start))
+    application.add_handler(CommandHandler("help", cmd_help))
     application.add_handler(CommandHandler("myid", cmd_myid))
     application.add_handler(CommandHandler("adduser", cmd_adduser))
-    application.add_handler(CallbackQueryHandler(handle_callback))
+    application.add_handler(CommandHandler("feed", cmd_feed))
+    application.add_handler(CommandHandler("status", cmd_status))
+    application.add_handler(CommandHandler("addtimer", cmd_addtimer))
+    application.add_handler(CommandHandler("timers", cmd_timers))
+    application.add_handler(CommandHandler("deletetimer", cmd_deletetimer))
 
     logger.info("Bot is polling for updates...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
