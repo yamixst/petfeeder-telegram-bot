@@ -1,0 +1,30 @@
+[telegram]
+# Telegram Bot API token obtained from @BotFather
+bot_token = YOUR_BOT_TOKEN_HERE
+
+# Comma-separated list of allowed Telegram user IDs
+# Only these users will be able to interact with the bot
+# You can find your ID via @userinfobot
+allowed_user_ids = 123456789
+
+[device]
+# Tuya device credentials
+device_id = YOUR_DEVICE_ID
+ip_address = 192.168.1.100
+local_key = YOUR_LOCAL_KEY
+
+# Tuya protocol version (common values: 3.1, 3.3, 3.4, 3.5)
+version = 3.5
+
+# Data point index used to trigger feeding
+feed_dp = 3
+
+# Number of portions to dispense per feed command
+portions = 1
+
+[logging]
+# Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+level = INFO
+
+# Log file path (leave empty to log to stdout only)
+file = catfeeder.log

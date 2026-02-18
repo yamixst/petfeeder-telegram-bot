@@ -1,0 +1,47 @@
+# Version control
+.git
+.gitignore
+
+# Documentation
+README.md
+LICENSE
+
+# Configuration (mounted at runtime, not baked into image)
+catfeeder.conf
+catfeeder.conf.example
+
+# Original standalone script
+catfeeder.py
+
+# Docker files
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Logs (mounted as volume)
+logs/
+*.log
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS artifacts
+.DS_Store
+Thumbs.db

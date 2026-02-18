@@ -1,0 +1,22 @@
+services:
+  catfeeder-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: catfeeder-bot
+    restart: unless-stopped
+
+    # Host network is required because tinytuya communicates
+    # with the feeder over the local network (UDP/TCP on LAN)
+    network_mode: host
+
+    volumes:
+      # Mount configuration file (read-only)
+      - ./catfeeder.conf:/app/catfeeder.conf:ro
+
+      # Persist log files on the host
+      - ./logs:/app/logs
+
+    # Timezone passthrough so log timestamps match the host
+    environment:
+      - TZ=${TZ:-UTC}

@@ -1,0 +1,2 @@
+python-telegram-bot>=21.0,<22.0
+tinytuya>=1.13.0,<2.0.0
