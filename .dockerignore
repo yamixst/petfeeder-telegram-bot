@@ -7,11 +7,11 @@ README.md
 LICENSE
 
 # Configuration (mounted at runtime, not baked into image)
-catfeeder.conf
-catfeeder.conf.example
+petfeeder.conf
+petfeeder.conf.example
 
 # Original standalone script
-catfeeder.py
+petfeeder.py
 
 # Docker files
 Dockerfile

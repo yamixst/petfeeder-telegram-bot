@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Telegram bot for controlling a Tuya-based automatic cat feeder.
+"""Telegram bot for controlling a Tuya-based automatic pet feeder.
 
 Provides commands:
   - /feed: dispenses a configured number of food portions
@@ -31,7 +31,7 @@ from telegram.ext import (
 # Configuration
 # ---------------------------------------------------------------------------
 
-CONFIG_PATH: Final[str] = str(Path(__file__).resolve().parent / "catfeeder.conf")
+CONFIG_PATH: Final[str] = str(Path(__file__).resolve().parent / "petfeeder.conf")
 TIMERS_PATH: Final[str] = str(Path(__file__).resolve().parent / "timers.json")
 
 
@@ -317,7 +317,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("User %s (%d) started the bot", user.full_name, user.id)
     await update.message.reply_text(
         f"👋 Hello, {user.first_name}!\n\n"
-        f"Cat Feeder Bot is ready. Use /help to see available commands."
+        f"Pet Feeder Bot is ready. Use /help to see available commands."
     )
 
 
@@ -336,7 +336,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if user and is_authorized(user.id):
         help_text += (
             "\n*Feeder Control:*\n"
-            f"/feed — Feed the cat ({PORTIONS} portions)\n"
+            f"/feed — Feed the pet ({PORTIONS} portions)\n"
             "/status — Check device status\n"
             "\n*Timer Management:*\n"
             "/addtimer HH:MM portions — Schedule feeding\n"
@@ -404,7 +404,7 @@ async def cmd_adduser(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def cmd_feed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /feed command — feed the cat."""
+    """Handle the /feed command — feed the pet."""
     user = update.effective_user
     if user is None or not is_authorized(user.id):
         logger.warning("Unauthorized /feed attempt from user %s", user)
@@ -421,7 +421,7 @@ async def cmd_feed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             text = f"⚠️ Feed command sent but device returned an error:\n`{error}`"
             logger.error("Feed error: %s", error)
         else:
-            text = f"✅ Fed the cat! Dispensed {PORTIONS} portion(s)."
+            text = f"✅ Fed the pet! Dispensed {PORTIONS} portion(s)."
     except Exception:
         logger.exception("Failed to send feed command")
         text = "❌ Failed to communicate with the feeder. Check the device connection."
@@ -613,7 +613,7 @@ async def post_init(application: Application) -> None:
 
 def main() -> None:
     """Build and run the Telegram bot application."""
-    logger.info("Starting Cat Feeder Bot...")
+    logger.info("Starting Pet Feeder Bot...")
 
     application = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
 

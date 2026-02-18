@@ -10,8 +10,8 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 # -- Stage 2: runtime image --
 FROM python:3.12-slim
 
-LABEL maintainer="catfeeder-bot"
-LABEL description="Telegram bot for controlling a Tuya-based automatic cat feeder"
+LABEL maintainer="petfeeder-bot"
+LABEL description="Telegram bot for controlling a Tuya-based automatic pet feeder"
 
 # Create non-root user
 RUN groupadd --gid 1000 appuser \
@@ -24,7 +24,7 @@ COPY --from=builder /install /usr/local
 WORKDIR /app
 
 # Copy application source
-COPY catfeeder_bot.py .
+COPY petfeeder_bot.py .
 
 # Create logs directory and set ownership
 RUN mkdir -p /app/logs && chown -R appuser:appuser /app
@@ -34,6 +34,6 @@ USER appuser
 
 # Health check — verify the process is alive
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD pgrep -f catfeeder_bot.py > /dev/null || exit 1
+    CMD pgrep -f petfeeder_bot.py > /dev/null || exit 1
 
-ENTRYPOINT ["python", "-u", "catfeeder_bot.py"]
+ENTRYPOINT ["python", "-u", "petfeeder_bot.py"]

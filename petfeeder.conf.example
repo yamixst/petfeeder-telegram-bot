@@ -27,4 +27,4 @@ portions = 1
 level = INFO
 
 # Log file path (leave empty to log to stdout only)
-file = catfeeder.log
+file = petfeeder.log

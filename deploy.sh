@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Catfeeder Bot Deployment Script
+# Pet Feeder Bot Deployment Script
 # Automates git commit, push, and Docker deployment
 # Usage: ./deploy.sh USER@HOST:PATH [commit_message]
 
@@ -28,7 +28,7 @@ log_error() {
 # Parse remote target from command line
 if [ -z "$1" ]; then
     log_error "Usage: $0 USER@HOST:PATH [commit_message]"
-    log_error "Example: $0 xst@100.91.51.1:/home/xst/catfeeder 'Fix bug'"
+    log_error "Example: $0 xst@100.91.51.1:/home/xst/petfeeder 'Fix bug'"
     exit 1
 fi
 
@@ -38,7 +38,7 @@ shift  # Remove first argument, rest are commit message
 # Parse USER@HOST:PATH format
 if [[ ! "$REMOTE_TARGET" =~ ^([^@]+)@([^:]+):(.+)$ ]]; then
     log_error "Invalid format. Expected: USER@HOST:PATH"
-    log_error "Example: xst@100.91.51.1:/home/xst/catfeeder"
+    log_error "Example: xst@100.91.51.1:/home/xst/petfeeder"
     exit 1
 fi
 
@@ -90,9 +90,9 @@ main() {
     git push $REMOTE_NAME main:master
 
     # Copy config if it exists and has changed
-    if [ -f "catfeeder.conf" ]; then
+    if [ -f "petfeeder.conf" ]; then
         log_info "Copying configuration file..."
-        scp catfeeder.conf $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/
+        scp petfeeder.conf $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/
     fi
 
     # Rebuild and restart on remote server

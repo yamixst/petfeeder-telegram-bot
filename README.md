@@ -1,8 +1,8 @@
-# 🐱 Cat Feeder Bot
+# 🐾 Pet Feeder Telegram Bot
 
-A Telegram bot for controlling a [Tuya](https://www.tuya.com/)-based automatic cat feeder over the local network.
+A Telegram bot for controlling a [Tuya](https://www.tuya.com/)-based automatic pet feeder over the local network.
 
-Feed your cat on demand or set up scheduled daily feedings — all from a Telegram chat.
+Feed your pet on demand or set up scheduled daily feedings — all from a Telegram chat.
 
 ## Features
 
@@ -31,7 +31,7 @@ Feed your cat on demand or set up scheduled daily feedings — all from a Telegr
 ## Prerequisites
 
 - **Python 3.12+**
-- A **Tuya-compatible automatic cat feeder** on your local network
+- A **Tuya-compatible automatic pet feeder** on your local network
 - Tuya device credentials (`device_id`, `local_key`) — see the [tinytuya setup guide](https://github.com/jasonacox/tinytuya#setup)
 - A **Telegram Bot token** from [@BotFather](https://t.me/BotFather)
 - **Docker** and **Docker Compose** (for containerized deployment)
@@ -41,17 +41,17 @@ Feed your cat on demand or set up scheduled daily feedings — all from a Telegr
 ### 1. Clone the repository
 
 ```
-git clone https://github.com/YOUR_USERNAME/catfeeder-bot.git
-cd catfeeder-bot
+git clone https://github.com/YOUR_USERNAME/petfeeder-bot.git
+cd petfeeder-bot
 ```
 
 ### 2. Create the configuration file
 
 ```
-cp catfeeder.conf.example catfeeder.conf
+cp petfeeder.conf.example petfeeder.conf
 ```
 
-Edit `catfeeder.conf` and fill in your values:
+Edit `petfeeder.conf` and fill in your values:
 
 ```ini
 [telegram]
@@ -68,7 +68,7 @@ portions = 1
 
 [logging]
 level = INFO
-file = catfeeder.log
+file = petfeeder.log
 ```
 
 > **Tip:** Use [@userinfobot](https://t.me/userinfobot) on Telegram to find your user ID, or send `/myid` to the bot once it's running.
@@ -93,7 +93,7 @@ docker compose logs -f
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python catfeeder_bot.py
+python petfeeder_bot.py
 ```
 
 ## Configuration Reference
@@ -150,7 +150,7 @@ The project includes a production-ready Docker setup:
 A deployment script is included for pushing updates to a remote server:
 
 ```
-./deploy.sh USER@HOST:/path/to/catfeeder-bot "Optional commit message"
+./deploy.sh USER@HOST:/path/to/petfeeder-bot "Optional commit message"
 ```
 
 The script will:
@@ -163,9 +163,9 @@ The script will:
 ## Project Structure
 
 ```
-catfeeder-bot/
-├── catfeeder_bot.py          # Main bot application
-├── catfeeder.conf.example    # Example configuration file
+petfeeder-bot/
+├── petfeeder_bot.py          # Main bot application
+├── petfeeder.conf.example    # Example configuration file
 ├── requirements.txt          # Python dependencies
 ├── Dockerfile                # Multi-stage Docker build
 ├── docker-compose.yml        # Docker Compose service definition

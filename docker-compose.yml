@@ -1,9 +1,9 @@
 services:
-  catfeeder-bot:
+  petfeeder-bot:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: catfeeder-bot
+    container_name: petfeeder-bot
     restart: unless-stopped
 
     # Host network is required because tinytuya communicates
@@ -12,7 +12,7 @@ services:
 
     volumes:
       # Mount configuration file (read-only)
-      - ./catfeeder.conf:/app/catfeeder.conf:ro
+      - ./petfeeder.conf:/app/petfeeder.conf:ro
 
       # Persist log files on the host
       - ./logs:/app/logs

@@ -1,5 +1,5 @@
 # Configuration (contains secrets and credentials)
-catfeeder.conf
+petfeeder.conf
 
 # Python bytecode
 __pycache__/
