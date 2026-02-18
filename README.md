@@ -54,6 +54,58 @@ A Telegram bot for controlling a Tuya-based automatic cat feeder over the local 
 
 > **Note:** The container runs with `network_mode: host` because tinytuya communicates with the feeder directly over the local network (UDP/TCP on LAN). This is required for device discovery and control.
 
+## Deployment
+
+The project includes a deployment script `deploy.sh` that automates the entire deployment process to a remote server.
+
+### Usage
+
+```bash
+./deploy.sh USER@HOST:PATH [commit_message]
+```
+
+**Examples:**
+
+Deploy with auto-generated commit message:
+```bash
+./deploy.sh xst@100.91.51.1:/home/xst/catfeeder
+```
+
+Deploy with custom commit message:
+```bash
+./deploy.sh xst@100.91.51.1:/home/xst/catfeeder "Fix feeding schedule bug"
+```
+
+### What the script does:
+
+1. ✅ Checks for local changes
+2. ✅ Commits changes to git (if any)
+3. ✅ Pushes code to remote server via git
+4. ✅ Copies `catfeeder.conf` via scp
+5. ✅ Rebuilds Docker image on remote server
+6. ✅ Restarts the container
+7. ✅ Shows deployment status and logs
+
+### First-time deployment setup:
+
+1. **On the remote server**, initialize git repository:
+   ```bash
+   ssh USER@HOST
+   cd /path/to/catfeeder
+   git init
+   git config receive.denyCurrentBranch updateInstead
+   ```
+
+2. **On your local machine**, add the remote:
+   ```bash
+   git remote add production ssh://USER@HOST/path/to/catfeeder
+   ```
+
+3. **Deploy using the script:**
+   ```bash
+   ./deploy.sh USER@HOST:/path/to/catfeeder "Initial deployment"
+   ```
+
 ### Setting the timezone
 
 By default the container uses UTC. To match your host timezone, set the `TZ` environment variable:
