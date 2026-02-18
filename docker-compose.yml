@@ -17,6 +17,9 @@ services:
       # Persist log files on the host
       - ./logs:/app/logs
 
+      # Persist timers and dynamically added users across container restarts
+      - ./data:/app/data
+
     # Timezone passthrough so log timestamps match the host
     environment:
       - TZ=${TZ:-UTC}

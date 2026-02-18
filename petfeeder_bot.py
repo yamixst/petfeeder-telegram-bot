@@ -32,7 +32,9 @@ from telegram.ext import (
 # ---------------------------------------------------------------------------
 
 CONFIG_PATH: Final[str] = str(Path(__file__).resolve().parent / "petfeeder.conf")
-TIMERS_PATH: Final[str] = str(Path(__file__).resolve().parent / "timers.json")
+DATA_DIR: Final[Path] = Path(__file__).resolve().parent / "data"
+TIMERS_PATH: Final[str] = str(DATA_DIR / "timers.json")
+USERS_PATH: Final[str] = str(DATA_DIR / "allowed_users.json")
 
 
 def load_config(path: str = CONFIG_PATH) -> configparser.ConfigParser:
@@ -81,11 +83,34 @@ CONFIG: Final[configparser.ConfigParser] = load_config()
 
 # Telegram settings
 BOT_TOKEN: Final[str] = CONFIG.get("telegram", "bot_token")
-ALLOWED_USER_IDS: set[int] = set(
+_config_user_ids: set[int] = set(
     int(uid.strip())
     for uid in CONFIG.get("telegram", "allowed_user_ids").split(",")
     if uid.strip()
 )
+
+
+def load_allowed_user_ids() -> set[int]:
+    """Load dynamically added user IDs from the persistent JSON file.
+
+    Merges them with the user IDs defined in the config file.
+
+    Returns:
+        Combined set of allowed user IDs.
+    """
+    ids = set(_config_user_ids)
+    if Path(USERS_PATH).is_file():
+        try:
+            with open(USERS_PATH, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+                ids.update(int(uid) for uid in saved)
+                logger.info("Loaded saved user IDs: %s", saved)
+        except Exception as e:
+            logger.error("Failed to load saved user IDs: %s", e)
+    return ids
+
+
+ALLOWED_USER_IDS: set[int] = load_allowed_user_ids()
 
 # Device settings
 DEVICE_ID: Final[str] = CONFIG.get("device", "device_id")
@@ -192,15 +217,14 @@ def is_authorized(user_id: int) -> bool:
 
 
 def save_allowed_user_ids() -> None:
-    """Persist the current ALLOWED_USER_IDS set back to the config file."""
-    CONFIG.set(
-        "telegram",
-        "allowed_user_ids",
-        ", ".join(str(uid) for uid in sorted(ALLOWED_USER_IDS)),
-    )
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        CONFIG.write(f)
-    logger.info("allowed_user_ids saved to config: %s", ALLOWED_USER_IDS)
+    """Persist the current ALLOWED_USER_IDS to a JSON file in the data directory."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(USERS_PATH, "w", encoding="utf-8") as f:
+            json.dump(sorted(ALLOWED_USER_IDS), f, indent=2)
+        logger.info("allowed_user_ids saved to %s: %s", USERS_PATH, ALLOWED_USER_IDS)
+    except Exception as e:
+        logger.error("Failed to save allowed user IDs: %s", e)
 
 
 # ---------------------------------------------------------------------------
@@ -229,6 +253,7 @@ def load_timers() -> dict[str, dict]:
 
 def save_timers() -> None:
     """Persist timer configuration to JSON file (without job objects)."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     data = {
         timer_key: {"portions": info["portions"]} for timer_key, info in TIMERS.items()
     }

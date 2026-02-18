@@ -35,6 +35,9 @@ env/
 logs/
 *.log
 
+# Persistent data (mounted as volume)
+data/
+
 # IDE / Editor
 .vscode/
 .idea/

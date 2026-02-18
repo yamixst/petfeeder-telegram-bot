@@ -26,8 +26,8 @@ WORKDIR /app
 # Copy application source
 COPY petfeeder_bot.py .
 
-# Create logs directory and set ownership
-RUN mkdir -p /app/logs && chown -R appuser:appuser /app
+# Create logs and data directories and set ownership
+RUN mkdir -p /app/logs /app/data && chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser

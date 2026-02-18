@@ -15,6 +15,9 @@ env/
 logs/
 *.log
 
+# Persistent data (timers, dynamically added users)
+data/
+
 # IDE / Editor
 .vscode/
 .idea/
