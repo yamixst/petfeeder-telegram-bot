@@ -13,6 +13,7 @@ import configparser
 import json
 import logging
 import sys
+import zoneinfo
 from datetime import time
 from pathlib import Path
 from typing import Final
@@ -93,6 +94,11 @@ LOCAL_KEY: Final[str] = CONFIG.get("device", "local_key")
 DEVICE_VERSION: Final[float] = CONFIG.getfloat("device", "version")
 FEED_DP: Final[str] = CONFIG.get("device", "feed_dp")
 PORTIONS: Final[int] = CONFIG.getint("device", "portions")
+
+# Timezone
+TIMEZONE: Final[zoneinfo.ZoneInfo] = zoneinfo.ZoneInfo(
+    CONFIG.get("general", "timezone", fallback="UTC")
+)
 
 # Logging settings
 LOG_LEVEL: Final[str] = CONFIG.get("logging", "level", fallback="INFO").upper()
@@ -265,7 +271,7 @@ def schedule_timer(job_queue: JobQueue, timer_key: str, portions: int) -> None:
     """
     try:
         hour, minute = map(int, timer_key.split(":"))
-        feed_time = time(hour=hour, minute=minute)
+        feed_time = time(hour=hour, minute=minute, tzinfo=TIMEZONE)
 
         job = job_queue.run_daily(
             timer_callback,
