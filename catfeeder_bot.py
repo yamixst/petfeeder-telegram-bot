@@ -74,7 +74,7 @@ CONFIG: Final[configparser.ConfigParser] = load_config()
 
 # Telegram settings
 BOT_TOKEN: Final[str] = CONFIG.get("telegram", "bot_token")
-ALLOWED_USER_IDS: Final[frozenset[int]] = frozenset(
+ALLOWED_USER_IDS: set[int] = set(
     int(uid.strip())
     for uid in CONFIG.get("telegram", "allowed_user_ids").split(",")
     if uid.strip()
@@ -180,6 +180,18 @@ def is_authorized(user_id: int) -> bool:
     return user_id in ALLOWED_USER_IDS
 
 
+def save_allowed_user_ids() -> None:
+    """Persist the current ALLOWED_USER_IDS set back to the config file."""
+    CONFIG.set(
+        "telegram",
+        "allowed_user_ids",
+        ", ".join(str(uid) for uid in sorted(ALLOWED_USER_IDS)),
+    )
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        CONFIG.write(f)
+    logger.info("allowed_user_ids saved to config: %s", ALLOWED_USER_IDS)
+
+
 # ---------------------------------------------------------------------------
 # Keyboard builder
 # ---------------------------------------------------------------------------
@@ -218,6 +230,58 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"👋 Hello, {user.first_name}!\n\n"
         "Use the buttons below to control the cat feeder:",
         reply_markup=build_main_keyboard(),
+    )
+
+
+async def cmd_myid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /myid command — tell the user their Telegram ID (no auth required)."""
+    user = update.effective_user
+    if user is None:
+        return
+
+    logger.info("User %s (%d) requested their ID", user.full_name, user.id)
+    await update.message.reply_text(
+        f"🆔 Your Telegram user ID: `{user.id}`", parse_mode="Markdown"
+    )
+
+
+async def cmd_adduser(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /adduser <id> command — add a user ID to the allowed list (auth required)."""
+    user = update.effective_user
+    if user is None or not is_authorized(user.id):
+        logger.warning("Unauthorized /adduser attempt from user %s", user)
+        await update.message.reply_text("⛔ Access denied.")
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "Usage: `/adduser <user_id>`", parse_mode="Markdown"
+        )
+        return
+
+    try:
+        new_uid = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text(
+            "⚠️ Invalid user ID. Please provide a numeric ID."
+        )
+        return
+
+    if new_uid in ALLOWED_USER_IDS:
+        await update.message.reply_text(
+            f"ℹ️ User `{new_uid}` is already in the allowed list.", parse_mode="Markdown"
+        )
+        return
+
+    ALLOWED_USER_IDS.add(new_uid)
+    save_allowed_user_ids()
+
+    logger.info(
+        "User %s (%d) added user %d to allowed list", user.full_name, user.id, new_uid
+    )
+    await update.message.reply_text(
+        f"✅ User `{new_uid}` has been added to the allowed list.",
+        parse_mode="Markdown",
     )
 
 
@@ -312,6 +376,8 @@ def main() -> None:
 
     # Register handlers
     application.add_handler(CommandHandler("start", cmd_start))
+    application.add_handler(CommandHandler("myid", cmd_myid))
+    application.add_handler(CommandHandler("adduser", cmd_adduser))
     application.add_handler(CallbackQueryHandler(handle_callback))
 
     logger.info("Bot is polling for updates...")
