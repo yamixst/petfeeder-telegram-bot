@@ -1,239 +1,195 @@
-# 🐱 Cat Feeder Telegram Bot
+# 🐱 Cat Feeder Bot
 
-A Telegram bot for controlling a Tuya-based automatic cat feeder over the local network using [TinyTuya](https://github.com/jasonacox/tinytuya).
+A Telegram bot for controlling a [Tuya](https://www.tuya.com/)-based automatic cat feeder over the local network.
+
+Feed your cat on demand or set up scheduled daily feedings — all from a Telegram chat.
 
 ## Features
 
-- **Feed** — dispense a configurable number of food portions with one tap
-- **Status** — query and display the current device state (data points)
-- **Access control** — restrict bot usage to a whitelist of Telegram user IDs
-- **Configuration file** — all settings live in a single `.conf` file (no hardcoded secrets)
-- **Docker support** — run as a container with `docker compose`
+- **On-demand feeding** — dispense food portions with a single `/feed` command
+- **Device status** — query the feeder's current state and data points
+- **Scheduled timers** — set up recurring daily feedings at specific times
+- **Multi-user access** — authorize additional Telegram users on the fly
+- **Local communication** — talks directly to the Tuya device on your LAN via [tinytuya](https://github.com/jasonacox/tinytuya) (no cloud dependency)
+- **Docker-ready** — ships with a multi-stage `Dockerfile` and `docker-compose.yml`
+- **Persistent config** — timers and user list survive restarts
+
+## Bot Commands
+
+| Command | Description |
+|---|---|
+| `/start` | Greet and verify access |
+| `/help` | Show available commands |
+| `/myid` | Get your Telegram user ID (no auth required) |
+| `/feed` | Dispense food (configured number of portions) |
+| `/status` | Query and display the device state |
+| `/addtimer HH:MM portions` | Schedule a daily feeding (e.g. `/addtimer 08:00 2`) |
+| `/timers` | List all scheduled feedings |
+| `/deletetimer HH:MM` | Remove a scheduled feeding |
+| `/adduser <user_id>` | Add a Telegram user to the allowed list |
 
 ## Prerequisites
 
-- A Tuya-compatible automatic cat feeder on your local network
-- Tuya device credentials (`device_id`, `local_key`) — see [TinyTuya Setup](https://github.com/jasonacox/tinytuya#setup)
-- A Telegram bot token from [@BotFather](https://t.me/BotFather)
-- **Docker** and **Docker Compose** (recommended), or Python 3.10+
+- **Python 3.12+**
+- A **Tuya-compatible automatic cat feeder** on your local network
+- Tuya device credentials (`device_id`, `local_key`) — see the [tinytuya setup guide](https://github.com/jasonacox/tinytuya#setup)
+- A **Telegram Bot token** from [@BotFather](https://t.me/BotFather)
+- **Docker** and **Docker Compose** (for containerized deployment)
 
-## Quick Start (Docker)
+## Quick Start
 
-1. **Clone the repository:**
+### 1. Clone the repository
 
-   ```
-   git clone <repo-url>
-   cd catfeeder-bot
-   ```
+```
+git clone https://github.com/YOUR_USERNAME/catfeeder-bot.git
+cd catfeeder-bot
+```
 
-2. **Create the configuration file:**
+### 2. Create the configuration file
 
-   ```
-   cp catfeeder.conf.example catfeeder.conf
-   ```
+```
+cp catfeeder.conf.example catfeeder.conf
+```
 
-   Edit `catfeeder.conf` with your real credentials (see [Configuration](#configuration) below).
+Edit `catfeeder.conf` and fill in your values:
 
-3. **Build and start the container:**
+```ini
+[telegram]
+bot_token = YOUR_BOT_TOKEN_HERE
+allowed_user_ids = 123456789
 
-   ```
-   docker compose up -d --build
-   ```
+[device]
+device_id = YOUR_DEVICE_ID
+ip_address = 192.168.1.100
+local_key = YOUR_LOCAL_KEY
+version = 3.5
+feed_dp = 3
+portions = 1
 
-4. **Check the logs:**
+[logging]
+level = INFO
+file = catfeeder.log
+```
 
-   ```
-   docker compose logs -f
-   ```
+> **Tip:** Use [@userinfobot](https://t.me/userinfobot) on Telegram to find your user ID, or send `/myid` to the bot once it's running.
 
-5. **Stop the bot:**
+### 3. Run with Docker Compose (recommended)
 
-   ```
-   docker compose down
-   ```
+```
+docker compose up -d --build
+```
 
-> **Note:** The container runs with `network_mode: host` because tinytuya communicates with the feeder directly over the local network (UDP/TCP on LAN). This is required for device discovery and control.
+The bot uses **host networking** so that `tinytuya` can reach the feeder over your local network.
+
+Check logs:
+
+```
+docker compose logs -f
+```
+
+### 4. Run without Docker
+
+```
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python catfeeder_bot.py
+```
+
+## Configuration Reference
+
+### `[telegram]`
+
+| Option | Description |
+|---|---|
+| `bot_token` | Telegram Bot API token from @BotFather |
+| `allowed_user_ids` | Comma-separated list of authorized Telegram user IDs |
+
+### `[device]`
+
+| Option | Description |
+|---|---|
+| `device_id` | Tuya device ID |
+| `ip_address` | Local IP address of the feeder |
+| `local_key` | Tuya device local key |
+| `version` | Tuya protocol version (`3.1`, `3.3`, `3.4`, or `3.5`) |
+| `feed_dp` | Data point index that triggers feeding |
+| `portions` | Default number of portions per feed command |
+
+### `[general]`
+
+| Option | Description | Default |
+|---|---|---|
+| `timezone` | IANA timezone for timer scheduling (e.g. `Europe/Moscow`) | `UTC` |
+
+### `[logging]`
+
+| Option | Description | Default |
+|---|---|---|
+| `level` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | `INFO` |
+| `file` | Log file path (empty = stdout only) | _(empty)_ |
+
+## Docker
+
+The project includes a production-ready Docker setup:
+
+- **Multi-stage build** — keeps the final image small
+- **Non-root user** — runs as `appuser` (UID 1000) for security
+- **Health check** — built-in process liveness check
+- **Host networking** — required for local Tuya device communication
+- **Volume mounts** — config file (read-only) and logs directory are mounted from the host
+
+### Environment Variables
+
+| Variable | Description | Default |
+|---|---|---|
+| `TZ` | Container timezone (for log timestamps) | `UTC` |
 
 ## Deployment
 
-The project includes a deployment script `deploy.sh` that automates the entire deployment process to a remote server.
-
-### Usage
-
-```bash
-./deploy.sh USER@HOST:PATH [commit_message]
-```
-
-**Examples:**
-
-Deploy with auto-generated commit message:
-```bash
-./deploy.sh xst@100.91.51.1:/home/xst/catfeeder
-```
-
-Deploy with custom commit message:
-```bash
-./deploy.sh xst@100.91.51.1:/home/xst/catfeeder "Fix feeding schedule bug"
-```
-
-### What the script does:
-
-1. ✅ Checks for local changes
-2. ✅ Commits changes to git (if any)
-3. ✅ Pushes code to remote server via git
-4. ✅ Copies `catfeeder.conf` via scp
-5. ✅ Rebuilds Docker image on remote server
-6. ✅ Restarts the container
-7. ✅ Shows deployment status and logs
-
-### First-time deployment setup:
-
-1. **On the remote server**, initialize git repository:
-   ```bash
-   ssh USER@HOST
-   cd /path/to/catfeeder
-   git init
-   git config receive.denyCurrentBranch updateInstead
-   ```
-
-2. **On your local machine**, add the remote:
-   ```bash
-   git remote add production ssh://USER@HOST/path/to/catfeeder
-   ```
-
-3. **Deploy using the script:**
-   ```bash
-   ./deploy.sh USER@HOST:/path/to/catfeeder "Initial deployment"
-   ```
-
-### Setting the timezone
-
-By default the container uses UTC. To match your host timezone, set the `TZ` environment variable:
+A deployment script is included for pushing updates to a remote server:
 
 ```
-TZ=Europe/Moscow docker compose up -d --build
+./deploy.sh USER@HOST:/path/to/catfeeder-bot "Optional commit message"
 ```
 
-Or create a `.env` file next to `docker-compose.yml`:
+The script will:
 
-```
-TZ=Europe/Moscow
-```
-
-## Manual Installation (without Docker)
-
-1. **Clone the repository:**
-
-   ```
-   git clone <repo-url>
-   cd catfeeder-bot
-   ```
-
-2. **Create and activate a virtual environment:**
-
-   ```
-   python3 -m venv .venv
-   source .venv/bin/activate
-   ```
-
-3. **Install dependencies:**
-
-   ```
-   pip install -r requirements.txt
-   ```
-
-4. **Configure the bot:**
-
-   ```
-   cp catfeeder.conf.example catfeeder.conf
-   ```
-
-   Edit `catfeeder.conf` with your values (see [Configuration](#configuration) below).
-
-5. **Run the bot:**
-
-   ```
-   python catfeeder_bot.py
-   ```
-
-## Configuration
-
-All settings are stored in `catfeeder.conf` (INI format):
-
-| Section      | Key                | Description                                         |
-|--------------|--------------------|-----------------------------------------------------|
-| `[telegram]` | `bot_token`        | Telegram Bot API token from @BotFather              |
-| `[telegram]` | `allowed_user_ids` | Comma-separated list of authorized user IDs         |
-| `[device]`   | `device_id`        | Tuya device ID                                      |
-| `[device]`   | `ip_address`       | Local IP address of the feeder                      |
-| `[device]`   | `local_key`        | Tuya local encryption key                           |
-| `[device]`   | `version`          | Tuya protocol version (`3.1`, `3.3`, `3.4`, `3.5`) |
-| `[device]`   | `feed_dp`          | Data point index for the feed command               |
-| `[device]`   | `portions`         | Number of portions per feed command                 |
-| `[logging]`  | `level`            | Log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`)     |
-| `[logging]`  | `file`             | Log file path (leave empty for stdout only)         |
-
-> **Tip:** Find your Telegram user ID by messaging [@userinfobot](https://t.me/userinfobot).
-
-## Usage
-
-Open your Telegram bot and send `/start`. You will see two inline buttons:
-
-- 🍽 **Feed** — triggers the feeder to dispense food
-- 📊 **Status** — shows current device data points
-
-## Running as a systemd Service
-
-If you prefer running without Docker, create `/etc/systemd/system/catfeeder-bot.service`:
-
-```
-[Unit]
-Description=Cat Feeder Telegram Bot
-After=network.target
-
-[Service]
-Type=simple
-User=catfeeder
-WorkingDirectory=/opt/catfeeder-bot
-ExecStart=/opt/catfeeder-bot/.venv/bin/python catfeeder_bot.py
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Then enable and start:
-
-```
-sudo systemctl daemon-reload
-sudo systemctl enable --now catfeeder-bot.service
-```
-
-## Security Notes
-
-- **Never commit `catfeeder.conf`** — it contains secrets. It is already listed in `.gitignore`.
-- The Docker image does **not** bake in the config — it is mounted as a read-only volume at runtime.
-- The container runs as a **non-root** user (`appuser`, UID 1000).
-- The bot only responds to users whose IDs are in the `allowed_user_ids` list.
-- Communication with the feeder happens over the **local network** (LAN), not through Tuya cloud.
+1. Commit and push local changes via Git
+2. Copy the config file to the remote server (if present)
+3. Rebuild the Docker image and restart the container on the remote host
+4. Display deployment status and recent logs
 
 ## Project Structure
 
 ```
 catfeeder-bot/
-├── catfeeder_bot.py        # Main bot application
-├── catfeeder.conf          # Configuration file (not committed)
-├── catfeeder.conf.example  # Example config safe to commit
-├── catfeeder.py            # Original standalone script
-├── docker-compose.yml      # Docker Compose service definition
-├── Dockerfile              # Multi-stage container build
-├── .dockerignore           # Files excluded from Docker build context
-├── .gitignore              # Git ignore rules
-├── logs/                   # Log files (Docker volume mount)
-├── requirements.txt        # Python dependencies
-└── README.md               # This file
+├── catfeeder_bot.py          # Main bot application
+├── catfeeder.conf.example    # Example configuration file
+├── requirements.txt          # Python dependencies
+├── Dockerfile                # Multi-stage Docker build
+├── docker-compose.yml        # Docker Compose service definition
+├── deploy.sh                 # Deployment automation script
+├── .gitignore
+└── .dockerignore
 ```
+
+## Dependencies
+
+| Package | Purpose |
+|---|---|
+| [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) `>=21.0` | Telegram Bot API framework (with job queue for timers) |
+| [tinytuya](https://github.com/jasonacox/tinytuya) `>=1.13.0` | Local Tuya device communication |
+
+## Obtaining Tuya Device Credentials
+
+To control your feeder locally, you need the `device_id`, `local_key`, and protocol `version`. Follow the [tinytuya setup instructions](https://github.com/jasonacox/tinytuya#setup) which involves:
+
+1. Creating a Tuya IoT developer account
+2. Linking your Tuya/Smart Life app
+3. Running `python -m tinytuya wizard` to extract credentials
+
+You can also use `python -m tinytuya scan` to discover the device's local IP address and protocol version.
 
 ## License
 
