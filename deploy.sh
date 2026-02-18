@@ -2,14 +2,9 @@
 
 # Catfeeder Bot Deployment Script
 # Automates git commit, push, and Docker deployment
+# Usage: ./deploy.sh USER@HOST:PATH [commit_message]
 
 set -e  # Exit on error
-
-# Configuration
-REMOTE_USER="xst"
-REMOTE_HOST="100.91.51.1"
-REMOTE_PATH="/home/xst/catfeeder"
-REMOTE_NAME="production"
 
 # Colors for output
 RED='\033[0;31m'
@@ -30,6 +25,28 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Parse remote target from command line
+if [ -z "$1" ]; then
+    log_error "Usage: $0 USER@HOST:PATH [commit_message]"
+    log_error "Example: $0 xst@100.91.51.1:/home/xst/catfeeder 'Fix bug'"
+    exit 1
+fi
+
+REMOTE_TARGET="$1"
+shift  # Remove first argument, rest are commit message
+
+# Parse USER@HOST:PATH format
+if [[ ! "$REMOTE_TARGET" =~ ^([^@]+)@([^:]+):(.+)$ ]]; then
+    log_error "Invalid format. Expected: USER@HOST:PATH"
+    log_error "Example: xst@100.91.51.1:/home/xst/catfeeder"
+    exit 1
+fi
+
+REMOTE_USER="${BASH_REMATCH[1]}"
+REMOTE_HOST="${BASH_REMATCH[2]}"
+REMOTE_PATH="${BASH_REMATCH[3]}"
+REMOTE_NAME="production"
+
 # Check if there are changes to commit
 check_changes() {
     if [[ -z $(git status -s) ]]; then
@@ -42,6 +59,7 @@ check_changes() {
 # Main deployment process
 main() {
     log_info "Starting deployment process..."
+    log_info "Remote: $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH"
 
     # Check for changes
     if check_changes; then
@@ -53,7 +71,7 @@ main() {
         if [ -z "$1" ]; then
             COMMIT_MSG="Deploy: $(date '+%Y-%m-%d %H:%M:%S')"
         else
-            COMMIT_MSG="$1"
+            COMMIT_MSG="$*"
         fi
 
         # Add all changes
