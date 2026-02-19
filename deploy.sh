@@ -28,7 +28,6 @@ log_error() {
 # Parse remote target from command line
 if [ -z "$1" ]; then
     log_error "Usage: $0 USER@HOST:PATH [commit_message]"
-    log_error "Example: $0 xst@100.91.51.1:/home/xst/petfeeder 'Fix bug'"
     exit 1
 fi
 
@@ -38,7 +37,6 @@ shift  # Remove first argument, rest are commit message
 # Parse USER@HOST:PATH format
 if [[ ! "$REMOTE_TARGET" =~ ^([^@]+)@([^:]+):(.+)$ ]]; then
     log_error "Invalid format. Expected: USER@HOST:PATH"
-    log_error "Example: xst@100.91.51.1:/home/xst/petfeeder"
     exit 1
 fi
 
