@@ -472,9 +472,15 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             text = f"⚠️ Device returned an error:\n`{error}`"
             logger.error("Status error: %s", error)
         else:
+            dp_names = {
+                "3": "manual_feed",
+                "4": "feed_state",
+                "11": "charge_state",
+                "14": "feed_report",
+            }
             dps = status.get("dps", {})
             lines = [
-                f"  `{dp}`: `{value}`"
+                f"  `{dp_names.get(str(dp), dp)}`: `{value}`"
                 for dp, value in sorted(dps.items(), key=lambda x: str(x[0]))
             ]
             dps_text = "\n".join(lines) if lines else "  (no data points)"
